@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cyber Flash Interface</title>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #000;
+    font-family: monospace;
+}
+
+canvas {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+#flash {
+    position: fixed;
+    inset: 0;
+    background: #00ff88;
+    opacity: 0;
+    pointer-events: none;
+    mix-blend-mode: screen;
+}
+
+#scanlines {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background:
+        repeating-linear-gradient(
+            to bottom,
+            rgba(255,255,255,.035) 0px,
+            rgba(255,255,255,.035) 1px,
+            transparent 2px,
+            transparent 5px
+        );
+}
+
+#ui {
+    position: fixed;
+    inset: 0;
+    color: #00ff88;
+    pointer-events: none;
+    text-shadow: 0 0 8px #00ff88;
+}
+
+.top {
+    position: absolute;
+    top: 20px;
+    left: 25px;
+    right: 25px;
+    display: flex;
+    justify-content: space-between;
+}
+
+.title {
+    font-size: 22px;
+    letter-spacing: 4px;
+}
+
+.status {
+    color: #00ffff;
+}
+
+.center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+}
+
+.warning {
+    font-size: clamp(30px, 6vw, 80px);
+    font-weight: bold;
+    letter-spacing: 10px;
+    animation: glitch .18s infinite;
+}
+
+.subtitle {
+    margin-top: 15px;
+    color: #00ffff;
+    letter-spacing: 5px;
+}
+
+.bottom {
+    position: absolute;
+    bottom: 20px;
+    left: 25px;
+    right: 25px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+}
+
+.bar {
+    width: 180px;
+    height: 8px;
+    border: 1px solid #00ff88;
+}
+
+.fill {
+    height: 100%;
+    width: 50%;
+    background: #00ff88;
+    box-shadow: 0 0 12px #00ff88;
+}
+
+@keyframes glitch {
+    0%   { transform: translate(0); }
+    25%  { transform: translate(3px,-2px); }
+    50%  { transform: translate(-3px,2px); }
+    75%  { transform: translate(2px,1px); }
+    100% { transform: translate(0); }
+}
+</style>
+</head>
+
+<body>
+
+<canvas id="canvas"></canvas>
+<div id="flash"></div>
+<div id="scanlines"></div>
+
+<div id="ui">
+
+    <div class="top">
+        <div class="title">CYBER // FLASH CORE</div>
+        <div class="status">
+            ● SYSTEM ONLINE
+        </div>
+    </div>
+
+    <div class="center">
+        <div class="warning">SYSTEM ACTIVE</div>
+        <div class="subtitle">
+            CONTINUOUS VISUAL SIMULATION
+        </div>
+    </div>
+
+    <div class="bottom">
+        <div>
+            FPS: <span id="fps">60</span>
+            &nbsp;&nbsp;
+            FRAME: <span id="frame">000000</span>
+        </div>
+
+        <div>
+            INTENSITY
+            <div class="bar">
+                <div class="fill" id="bar"></div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+const flash = document.getElementById("flash");
+const fpsDisplay = document.getElementById("fps");
+const frameDisplay = document.getElementById("frame");
+const intensityBar = document.getElementById("bar");
+
+let width;
+let height;
+let particles = [];
+
+let frame = 0;
+let lastTime = performance.now();
+let fps = 60;
+
+let hue = 140;
+let intensity = 0;
+
+function resize() {
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
+
+    particles = [];
+
+    const count = Math.min(
+        220,
+        Math.floor(width * height / 7000)
+    );
+
+    for (let i = 0; i < count; i++) {
+        particles.push({
+            x: Math.random() * width,
+            y: Math.random() * height,
+            vx: (Math.random() - .5) * 2,
+            vy: (Math.random() - .5) * 2,
+            size: Math.random() * 3 + 1,
+            life: Math.random()
+        });
+    }
+}
+
+window.addEventListener("resize", resize);
+resize();
+
+function randomColor() {
+    return `hsl(${hue}, 100%, 50%)`;
+}
+
+function drawBackground() {
+
+    const gradient = ctx.createRadialGradient(
+        width / 2,
+        height / 2,
+        0,
+        width / 2,
+        height / 2,
+        Math.max(width, height)
+    );
+
+    gradient.addColorStop(
+        0,
+        `hsla(${hue},100%,15%,1)`
+    );
+
+    gradient.addColorStop(
+        1,
+        `hsla(${hue + 50},100%,2%,1)`
+    );
+
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, width, height);
+}
+
+function drawGrid() {
+
+    ctx.strokeStyle =
+        `hsla(${hue},100%,50%,.08)`;
+
+    ctx.lineWidth = 1;
+
+    const spacing = 50;
+
+    for (let x = 0; x < width; x += spacing) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+        ctx.stroke();
+    }
+
+    for (let y = 0; y < height; y += spacing) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+        ctx.stroke();
+    }
+}
+
+function drawParticles() {
+
+    particles.forEach(p => {
+
+        p.x += p.vx;
+        p.y += p.vy;
+
+        if (p.x < 0) p.x = width;
+        if (p.x > width) p.x = 0;
+
+        if (p.y < 0) p.y = height;
+        if (p.y > height) p.y = 0;
+
+        ctx.beginPath();
+
+        ctx.fillStyle =
+            `hsla(${hue},100%,70%,${p.life})`;
+
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = randomColor();
+
+        ctx.arc(
+            p.x,
+            p.y,
+            p.size,
+            0,
+            Math.PI * 2
+        );
+
+        ctx.fill();
+    });
+
+    ctx.shadowBlur = 0;
+}
+
+function drawRings() {
+
+    const cx = width / 2;
+    const cy = height / 2;
+
+    for (let i = 0; i < 5; i++) {
+
+        const radius =
+            100 +
+            i * 90 +
+            Math.sin(frame * .03 + i) * 20;
+
+        ctx.beginPath();
+
+        ctx.arc(
+            cx,
+            cy,
+            radius,
+            0,
+            Math.PI * 2
+        );
+
+        ctx.strokeStyle =
+            `hsla(${hue},100%,60%,${.12 - i*.015})`;
+
+        ctx.lineWidth = 2;
+
+        ctx.stroke();
+    }
+}
+
+function updateFlash() {
+
+    /*
+      Smooth flashing rather than an extremely
+      rapid strobe.
+    */
+
+    const wave =
+        (Math.sin(frame * .16) + 1) / 2;
+
+    intensity =
+        Math.pow(wave, 7) * .45;
+
+    flash.style.background =
+        `hsl(${hue},100%,60%)`;
+
+    flash.style.opacity = intensity;
+
+    intensityBar.style.width =
+        `${Math.round(intensity * 220)}%`;
+}
+
+function animate(time) {
+
+    frame++;
+
+    hue += .35;
+
+    if (hue >= 360) {
+        hue = 0;
+    }
+
+    drawBackground();
+    drawGrid();
+    drawRings();
+    drawParticles();
+    updateFlash();
+
+    frameDisplay.textContent =
+        String(frame).padStart(6, "0");
+
+    const delta = time - lastTime;
+
+    if (delta >= 500) {
+
+        fps =
+            Math.round(1000 / (delta / 30));
+
+        fpsDisplay.textContent =
+            Math.min(fps, 60);
+
+        lastTime = time;
+    }
+
+    requestAnimationFrame(animate);
+}
+
+animate(performance.now());
+
+/* Keyboard controls */
+
+document.addEventListener("keydown", e => {
+
+    if (e.key === "ArrowUp") {
+        hue += 20;
+    }
+
+    if (e.key === "ArrowDown") {
+        hue -= 20;
+    }
+
+    if (e.key === " ") {
+        document.documentElement.requestFullscreen?.();
+    }
+});
+</script>
+
+</body>
+</html>
